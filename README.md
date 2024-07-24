@@ -6,7 +6,6 @@ This userscript adds a resizable banner at the top of web pages to display all m
 ## Features
 - Displays magnet links in a fixed banner at the top of the page.
 - Banner is resizable via a draggable handle at the bottom.
-- The banner and scrollbar use a consistent color scheme.
 - Scrollable if the content exceeds the visible area.
 
 ## Installation
