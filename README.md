@@ -1,7 +1,7 @@
 # Resizable Magnet Link Banner Userscript
 
 ## Description
-This userscript adds a resizable banner at the top of web pages to display all magnet links found on the page. The banner is scrollable and resizable, with the option to drag and adjust its height. The text of each link is derived from the `dn=` parameter in the magnet link.
+This userscript creates a resizable banner at the top of a web page to display all magnet links found on the page in an easy-to-click format, bypassing annoying redirects and URL masking. The banner is scrollable and resizable, with the option to drag and adjust its height. The text of each link is derived from the `dn=` parameter in the magnet link.
 
 ## Features
 - Displays magnet links in a fixed banner at the top of the page.
