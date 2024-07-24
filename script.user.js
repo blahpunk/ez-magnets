@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Resizable Magnet Link Banner
 // @namespace    http://tampermonkey.net/
-// @version      1.5
-// @description  Displays magnet links in a resizable fixed banner at the top of the page with clear text from the dn= parameter, limits banner height, and includes a draggable resize handle with a darker blue scrollbar
+// @version      1.6
+// @description  Displays magnet links in a resizable fixed banner at the top of the page with clear text from the dn= parameter, limits banner height, and includes a draggable resize handle with a darker blue scrollbar. Duplicate links are excluded.
 // @author       BlahPunk
 // @match        *://*/*
 // @grant        none
@@ -34,21 +34,13 @@
         banner.style.overflowY = 'auto'; // Allow scrolling if needed
         banner.style.maxHeight = '500px'; // Set maximum height for the banner
         banner.style.boxSizing = 'border-box'; // Include padding and border in the element's total width and height
+        banner.style.resize = 'vertical'; // Make the banner vertically resizable
 
-        // Create a resize handle at the bottom
-        const resizeHandle = document.createElement('div');
-        resizeHandle.style.height = '5px';
-        resizeHandle.style.backgroundColor = '#104E8B'; // Darker blue color for the resize handle
-        resizeHandle.style.cursor = 'ns-resize';
-        resizeHandle.style.position = 'absolute';
-        resizeHandle.style.bottom = '0';
-        resizeHandle.style.left = '0';
-        resizeHandle.style.width = '100%';
+        // Create a container to hold the links
+        const linkContainer = document.createElement('div');
+        linkContainer.style.overflowY = 'auto'; // Allow scrolling if needed
 
-        // Append resize handle to banner
-        banner.appendChild(resizeHandle);
-
-        // Add links to the banner
+        // Add links to the container
         magnetLinks.forEach(link => {
             const magnetLink = document.createElement('a');
             magnetLink.href = link.url;
@@ -57,9 +49,10 @@
             magnetLink.style.color = '#fff';
             magnetLink.style.textDecoration = 'none';
             magnetLink.style.marginBottom = '5px';
-            banner.appendChild(magnetLink);
+            linkContainer.appendChild(magnetLink);
         });
 
+        banner.appendChild(linkContainer);
         document.body.appendChild(banner);
 
         // Add CSS for scrollbar styling
@@ -91,11 +84,13 @@
         let isResizing = false;
         let lastDownY = 0;
 
-        resizeHandle.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            lastDownY = e.clientY;
-            document.addEventListener('mousemove', resize);
-            document.addEventListener('mouseup', stopResize);
+        banner.addEventListener('mousedown', (e) => {
+            if (e.target === banner) {
+                isResizing = true;
+                lastDownY = e.clientY;
+                document.addEventListener('mousemove', resize);
+                document.addEventListener('mouseup', stopResize);
+            }
         });
 
         function resize(e) {
@@ -117,10 +112,13 @@
     function findMagnetLinks() {
         const links = document.querySelectorAll('a[href*="magnet%3A%3F"], a[href*="magnet:"]');
         const magnetLinks = [];
+        const uniqueLinks = new Set();
+
         links.forEach(link => {
             const magnetLink = decodeURIComponent(link.href);
             const magnetLinkMatch = magnetLink.match(/magnet:\?.*/);
-            if (magnetLinkMatch) {
+            if (magnetLinkMatch && !uniqueLinks.has(magnetLinkMatch[0])) {
+                uniqueLinks.add(magnetLinkMatch[0]);
                 magnetLinks.push({ url: magnetLinkMatch[0], text: getMagnetLinkText(magnetLinkMatch[0]) });
             }
         });
