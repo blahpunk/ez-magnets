@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Resizable Magnet Link Banner
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.9
 // @description  Displays magnet links in a resizable fixed banner at the top of the page with clear text from the dn= parameter, limits banner height, and includes a draggable resize handle with a darker blue scrollbar. Duplicate links are excluded.
 // @author       BlahPunk
 // @match        *://*/*
@@ -34,13 +34,24 @@
         banner.style.overflowY = 'auto'; // Allow scrolling if needed
         banner.style.maxHeight = '500px'; // Set maximum height for the banner
         banner.style.boxSizing = 'border-box'; // Include padding and border in the element's total width and height
-        banner.style.resize = 'vertical'; // Make the banner vertically resizable
+        banner.style.borderBottom = '10px solid #104E8B'; // Space for the resize handle
 
-        // Create a container to hold the links
-        const linkContainer = document.createElement('div');
-        linkContainer.style.overflowY = 'auto'; // Allow scrolling if needed
+        // Create a resize handle positioned at the bottom of the banner
+        const resizeHandle = document.createElement('div');
+        resizeHandle.style.position = 'absolute';
+        resizeHandle.style.left = '0';
+        resizeHandle.style.bottom = '0';
+        resizeHandle.style.width = '100%';
+        resizeHandle.style.height = '10px'; // Solid 10px high area for dragging
+        resizeHandle.style.backgroundColor = '#104E8B'; // Darker blue color for the resize handle
+        resizeHandle.style.cursor = 'ns-resize';
+        resizeHandle.style.zIndex = '10001'; // Ensure it's above the banner
+        resizeHandle.style.textAlign = 'center';
+        resizeHandle.style.lineHeight = '10px'; // Center the ^ vertically
+        resizeHandle.style.color = '#fff'; // Color of the ^ character
+        resizeHandle.textContent = '^'; // Add ^ character
 
-        // Add links to the container
+        // Add links to the banner
         magnetLinks.forEach(link => {
             const magnetLink = document.createElement('a');
             magnetLink.href = link.url;
@@ -49,11 +60,14 @@
             magnetLink.style.color = '#fff';
             magnetLink.style.textDecoration = 'none';
             magnetLink.style.marginBottom = '5px';
-            linkContainer.appendChild(magnetLink);
+            banner.appendChild(magnetLink);
         });
 
-        banner.appendChild(linkContainer);
+        // Append banner to the body
         document.body.appendChild(banner);
+
+        // Append resize handle to the banner
+        banner.appendChild(resizeHandle);
 
         // Add CSS for scrollbar styling
         const style = document.createElement('style');
@@ -77,20 +91,18 @@
         // Apply class to banner for scrollbar styling
         banner.classList.add('resizable-banner');
 
-        // Push the rest of the content down
+        // Adjust the body's margin to account for the banner height
         document.body.style.marginTop = `${banner.offsetHeight}px`;
 
         // Make the banner resizable
         let isResizing = false;
         let lastDownY = 0;
 
-        banner.addEventListener('mousedown', (e) => {
-            if (e.target === banner) {
-                isResizing = true;
-                lastDownY = e.clientY;
-                document.addEventListener('mousemove', resize);
-                document.addEventListener('mouseup', stopResize);
-            }
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            lastDownY = e.clientY;
+            document.addEventListener('mousemove', resize);
+            document.addEventListener('mouseup', stopResize);
         });
 
         function resize(e) {
