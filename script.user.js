@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Resizable Magnet and Torrent Link Banner (Full Block + Refresh)
+// @name         Resizable Magnet and Torrent Link Banner (Conditional Block + Refresh)
 // @namespace    http://tampermonkey.net/
-// @version      5.4
-// @description  Block all page content and scripts, show only magnet and .torrent links. Detects redirect URLs. Reloads banner after page load to prevent popups. Includes toggle to reload page content. All original features preserved.
+// @version      5.5
+// @description  Show magnet and .torrent links in a banner, block page content/scripts only if links are found. Detects redirects like mylink URLs. Reloads banner after page load to prevent popups. All original features preserved.
 // @author       BlahPunk
 // @match        *://*/*
 // @grant        none
@@ -64,7 +64,7 @@
         banner.style.width = '100%';
         banner.style.backgroundColor = '#1C1C1C';
         banner.style.color = '#E0E0E0';
-        banner.style.zIndex = '999999';  // Ensures top layer
+        banner.style.zIndex = '999999';
         banner.style.padding = '10px';
         banner.style.fontSize = '14px';
         banner.style.fontFamily = 'Arial, sans-serif';
@@ -194,20 +194,20 @@
         return { magnetLinks, torrentLinks };
     }
 
-    function refreshDisplay() {
-        wipeListeners();
+    function refreshIfNeeded() {
         const { magnetLinks, torrentLinks } = findLinks();
         if (magnetLinks.length || torrentLinks.length) {
+            blockScripts();
+            wipeListeners();
             buildBanner(magnetLinks, torrentLinks);
         }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        blockScripts();
-        refreshDisplay();
+        refreshIfNeeded();
     });
 
     window.addEventListener('load', () => {
-        setTimeout(refreshDisplay, 300);  // Reprocess links after full page load
+        setTimeout(refreshIfNeeded, 300);
     });
 })();
