@@ -1,186 +1,213 @@
 // ==UserScript==
-// @name         Resizable Magnet Link Banner
+// @name         Resizable Magnet and Torrent Link Banner (Full Block + Refresh)
 // @namespace    http://tampermonkey.net/
-// @version      4.4
-// @description  Displays magnet links in a resizable fixed banner at the top of the page with clear text from the dn= parameter, limits banner height, and includes a draggable resize handle with a gothic style and a clipboard copy button. Duplicate links are excluded. Now with green hues for buttons and link effects.
+// @version      5.4
+// @description  Block all page content and scripts, show only magnet and .torrent links. Detects redirect URLs. Reloads banner after page load to prevent popups. Includes toggle to reload page content. All original features preserved.
 // @author       BlahPunk
 // @match        *://*/*
 // @grant        none
+// @run-at       document-start
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // Function to extract the dn= parameter from a magnet link
+    let banner, resizeHandle;
+
+    const blockScripts = () => {
+        const removeScripts = () => {
+            document.querySelectorAll('script, iframe, embed, object').forEach(e => e.remove());
+        };
+        new MutationObserver(removeScripts).observe(document.documentElement, { childList: true, subtree: true });
+        removeScripts();
+    };
+
+    const wipeListeners = () => {
+        const clone = node => node.cloneNode(true);
+        document.documentElement.replaceWith(clone(document.documentElement));
+        document.body && document.body.replaceWith(clone(document.body));
+    };
+
     function getMagnetLinkText(magnetLink) {
         const dnMatch = magnetLink.match(/dn=([^&]*)/);
         return dnMatch ? decodeURIComponent(dnMatch[1]) : `Magnet Link ${Math.random().toString(36).substr(2, 5)}`;
     }
 
-    // Function to create and display the magnet link banner
-    function createMagnetLinkBanner(magnetLinks) {
-        const banner = document.createElement('div');
+    function getTorrentLinkText(torrentLink) {
+        return decodeURIComponent(torrentLink.split('/').pop().split('?')[0] || `Torrent File ${Math.random().toString(36).substr(2, 5)}`);
+    }
+
+    function extractMagnetFromURL(url) {
+        const decoded = decodeURIComponent(url);
+        const match = decoded.match(/magnet:\?.+/);
+        return match ? match[0] : null;
+    }
+
+    function copyToClipboard(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+        alert('Copied to clipboard: ' + text);
+    }
+
+    function buildBanner(magnetLinks, torrentLinks) {
+        if (banner) banner.remove();
+        if (resizeHandle) resizeHandle.remove();
+
+        banner = document.createElement('div');
         banner.style.position = 'fixed';
         banner.style.top = '0';
         banner.style.left = '0';
         banner.style.width = '100%';
-        banner.style.backgroundColor = '#1C1C1C'; // Darker, gothic background
-        banner.style.color = '#E0E0E0'; // Lighter text
-        banner.style.zIndex = '10000';
+        banner.style.backgroundColor = '#1C1C1C';
+        banner.style.color = '#E0E0E0';
+        banner.style.zIndex = '999999';  // Ensures top layer
         banner.style.padding = '10px';
-        banner.style.textAlign = 'left'; // Align text to the left
-        banner.style.fontSize = '14px'; // Smaller font size for the banner text
+        banner.style.fontSize = '14px';
         banner.style.fontFamily = 'Arial, sans-serif';
-        banner.style.overflowY = 'auto'; // Allow scrolling if needed
-        banner.style.maxHeight = '500px'; // Set maximum height for the banner
-        banner.style.boxSizing = 'border-box'; // Include padding and border in the element's total width and height
-        banner.style.borderTop = '1px solid #444'; // Top border for a framed look
+        banner.style.overflowY = 'auto';
+        banner.style.maxHeight = '500px';
+        banner.style.boxSizing = 'border-box';
+        banner.style.borderTop = '1px solid #444';
 
-        // Create a resize handle positioned just below the banner
-        const resizeHandle = document.createElement('div');
-        resizeHandle.style.position = 'fixed';
-        resizeHandle.style.left = '0';
-        resizeHandle.style.top = `${banner.offsetHeight}px`; // Position it just below the banner
-        resizeHandle.style.width = '100%';
-        resizeHandle.style.height = '10px'; // Shorter handle
-        resizeHandle.style.backgroundColor = '#333'; // Darker color for the resize handle
-        resizeHandle.style.cursor = 'ns-resize';
-        resizeHandle.style.zIndex = '10001'; // Ensure it's above the banner
-        resizeHandle.style.textAlign = 'center';
-        resizeHandle.style.lineHeight = '10px'; // Center the ^ vertically
-        resizeHandle.style.color = '#E0E0E0'; // Color of the ^ character
-        resizeHandle.textContent = '^'; // Add ^ character
+        if (magnetLinks.length) {
+            const header = document.createElement('h3');
+            header.textContent = 'Magnet Links';
+            header.style.color = '#32CD32';
+            header.style.margin = '10px 0 5px 0';
+            banner.appendChild(header);
 
-        // Function to copy text to clipboard
-        function copyToClipboard(text) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            alert('Copied to clipboard: ' + text);
+            magnetLinks.forEach(link => {
+                const container = document.createElement('div');
+                container.style.display = 'flex';
+                container.style.alignItems = 'center';
+                container.style.marginBottom = '5px';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent = '📋';
+                Object.assign(copyBtn.style, { marginRight: '10px', backgroundColor: '#228B22', border: 'none', color: '#E0E0E0', cursor: 'pointer', fontSize: '12px', padding: '5px', borderRadius: '3px' });
+                copyBtn.addEventListener('click', e => { e.stopPropagation(); copyToClipboard(link.url); });
+
+                const a = document.createElement('a');
+                a.href = link.url;
+                a.textContent = `${link.text} (Magnet)`;
+                Object.assign(a.style, { color: '#E0E0E0', textDecoration: 'none', fontSize: '12px' });
+                a.addEventListener('click', e => e.stopPropagation());
+
+                container.appendChild(copyBtn);
+                container.appendChild(a);
+                banner.appendChild(container);
+            });
         }
 
-        // Add links to the banner
-        magnetLinks.forEach(link => {
-            const linkContainer = document.createElement('div');
-            linkContainer.style.display = 'flex';
-            linkContainer.style.alignItems = 'center';
-            linkContainer.style.marginBottom = '5px';
+        if (torrentLinks.length) {
+            const header = document.createElement('h3');
+            header.textContent = 'Torrent Files';
+            header.style.color = '#32CD32';
+            header.style.margin = '10px 0 5px 0';
+            banner.appendChild(header);
 
-            const copyButton = document.createElement('button');
-            copyButton.textContent = '📋';
-            copyButton.style.marginRight = '10px';
-            copyButton.style.backgroundColor = '#228B22'; // Green button background
-            copyButton.style.border = 'none';
-            copyButton.style.color = '#E0E0E0'; // Button text color
-            copyButton.style.cursor = 'pointer';
-            copyButton.style.fontSize = '12px'; // Smaller font size for the button
-            copyButton.style.padding = '5px';
-            copyButton.style.borderRadius = '3px'; // Slight border radius
-            copyButton.addEventListener('click', () => copyToClipboard(link.url));
-            copyButton.addEventListener('mouseover', () => copyButton.style.backgroundColor = '#32CD32'); // Lighter green on hover
-            copyButton.addEventListener('mouseout', () => copyButton.style.backgroundColor = '#228B22'); // Darker green on mouse out
+            torrentLinks.forEach(link => {
+                const container = document.createElement('div');
+                container.style.display = 'flex';
+                container.style.alignItems = 'center';
+                container.style.marginBottom = '5px';
 
-            const magnetLink = document.createElement('a');
-            magnetLink.href = link.url;
-            magnetLink.textContent = link.text + " (Magnet Link)";
-            magnetLink.style.color = '#E0E0E0'; // Lighter text for links
-            magnetLink.style.textDecoration = 'none';
-            magnetLink.style.fontSize = '12px'; // Smaller font size for the links
-            magnetLink.style.marginRight = '10px';
-            magnetLink.addEventListener('mouseover', () => magnetLink.style.color = '#32CD32'); // Lighter green on hover
-            magnetLink.addEventListener('mouseout', () => magnetLink.style.color = '#E0E0E0'); // Lighter text on mouse out
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent = '📋';
+                Object.assign(copyBtn.style, { marginRight: '10px', backgroundColor: '#228B22', border: 'none', color: '#E0E0E0', cursor: 'pointer', fontSize: '12px', padding: '5px', borderRadius: '3px' });
+                copyBtn.addEventListener('click', e => { e.stopPropagation(); copyToClipboard(link.url); });
 
-            linkContainer.appendChild(copyButton);
-            linkContainer.appendChild(magnetLink);
-            banner.appendChild(linkContainer);
-        });
+                const a = document.createElement('a');
+                a.href = link.url;
+                a.textContent = `${link.text} (.torrent)`;
+                Object.assign(a.style, { color: '#E0E0E0', textDecoration: 'none', fontSize: '12px' });
+                a.addEventListener('click', e => e.stopPropagation());
 
-        // Append banner to the body
+                container.appendChild(copyBtn);
+                container.appendChild(a);
+                banner.appendChild(container);
+            });
+        }
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.textContent = 'Reload Page Content';
+        Object.assign(toggleBtn.style, { marginTop: '10px', backgroundColor: '#228B22', border: 'none', color: '#E0E0E0', cursor: 'pointer', fontSize: '12px', padding: '5px', borderRadius: '3px' });
+        toggleBtn.addEventListener('click', () => location.reload());
+        banner.appendChild(toggleBtn);
+
         document.body.appendChild(banner);
 
-        // Append resize handle to the body
+        resizeHandle = document.createElement('div');
+        Object.assign(resizeHandle.style, { position: 'fixed', left: '0', top: `${banner.offsetHeight}px`, width: '100%', height: '10px', backgroundColor: '#333', cursor: 'ns-resize', zIndex: '999999', textAlign: 'center', lineHeight: '10px', color: '#E0E0E0' });
+        resizeHandle.textContent = '^';
         document.body.appendChild(resizeHandle);
 
-        // Add CSS for scrollbar styling
-        const style = document.createElement('style');
-        style.textContent = `
-            .resizable-banner::-webkit-scrollbar {
-                width: 12px;
-            }
-            .resizable-banner::-webkit-scrollbar-track {
-                background: #1C1C1C; /* Background color for scrollbar track */
-            }
-            .resizable-banner::-webkit-scrollbar-thumb {
-                background: #333; /* Darker color for scrollbar thumb */
-                border-radius: 6px;
-            }
-            .resizable-banner::-webkit-scrollbar-thumb:hover {
-                background: #444;
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Apply class to banner for scrollbar styling
-        banner.classList.add('resizable-banner');
-
-        // Adjust the body's margin to account for the banner height
-        document.body.style.marginTop = `${banner.offsetHeight + 10}px`; // Add 10px for the handle height
-
-        // Make the banner resizable
-        let isResizing = false;
-        let lastDownY = 0;
-
-        resizeHandle.addEventListener('mousedown', (e) => {
+        let isResizing = false, lastY = 0;
+        resizeHandle.addEventListener('mousedown', e => {
             isResizing = true;
-            lastDownY = e.clientY;
+            lastY = e.clientY;
             document.addEventListener('mousemove', resize);
             document.addEventListener('mouseup', stopResize);
         });
-
         function resize(e) {
             if (!isResizing) return;
-            const offset = e.clientY - lastDownY;
+            const offset = e.clientY - lastY;
             banner.style.height = `${banner.offsetHeight + offset}px`;
-            lastDownY = e.clientY;
-            resizeHandle.style.top = `${banner.offsetHeight}px`; // Move handle along with the banner
-            document.body.style.marginTop = `${banner.offsetHeight + 10}px`; // Adjust body's margin
+            lastY = e.clientY;
+            resizeHandle.style.top = `${banner.offsetHeight}px`;
         }
-
         function stopResize() {
             isResizing = false;
             document.removeEventListener('mousemove', resize);
             document.removeEventListener('mouseup', stopResize);
         }
-    }
 
-    // Function to find magnet links on the page
-    function findMagnetLinks() {
-        const links = document.querySelectorAll('a[href*="magnet%3A%3F"], a[href*="magnet:"]');
-        const magnetLinks = [];
-        const uniqueLinks = new Set();
-
-        links.forEach(link => {
-            const magnetLink = decodeURIComponent(link.href);
-            const magnetLinkMatch = magnetLink.match(/magnet:\?.*/);
-            if (magnetLinkMatch && !uniqueLinks.has(magnetLinkMatch[0])) {
-                uniqueLinks.add(magnetLinkMatch[0]);
-                magnetLinks.push({ url: magnetLinkMatch[0], text: getMagnetLinkText(magnetLinkMatch[0]) });
+        Array.from(document.body.children).forEach(el => {
+            if (!banner.contains(el) && el !== resizeHandle) {
+                el.style.display = 'none';
             }
         });
-        return magnetLinks;
     }
 
-    // Initialize the script
-    function init() {
-        const magnetLinks = findMagnetLinks();
-        if (magnetLinks.length > 0) {
-            createMagnetLinkBanner(magnetLinks);
+    function findLinks() {
+        const magnetLinks = [], torrentLinks = [];
+        const magnetSet = new Set(), torrentSet = new Set();
+
+        document.querySelectorAll('a[href]').forEach(link => {
+            const href = link.href;
+            const magnet = extractMagnetFromURL(href);
+            if (magnet && !magnetSet.has(magnet)) {
+                magnetSet.add(magnet);
+                magnetLinks.push({ url: magnet, text: getMagnetLinkText(magnet) });
+            }
+
+            if (href.match(/\.torrent(\?|$)/i) && !torrentSet.has(href)) {
+                torrentSet.add(href);
+                torrentLinks.push({ url: href, text: getTorrentLinkText(href) });
+            }
+        });
+
+        return { magnetLinks, torrentLinks };
+    }
+
+    function refreshDisplay() {
+        wipeListeners();
+        const { magnetLinks, torrentLinks } = findLinks();
+        if (magnetLinks.length || torrentLinks.length) {
+            buildBanner(magnetLinks, torrentLinks);
         }
     }
 
-    // Run the script once the DOM is fully loaded
-    window.addEventListener('load', init);
+    window.addEventListener('DOMContentLoaded', () => {
+        blockScripts();
+        refreshDisplay();
+    });
+
+    window.addEventListener('load', () => {
+        setTimeout(refreshDisplay, 300);  // Reprocess links after full page load
+    });
 })();
